@@ -3,14 +3,19 @@ import pickle
 import time
 import numpy
 import string
-from trainer.count_utils import *
+import logging
+import en_core_web_lg
+from models.models import Word, WordPair
+from spacy.tokens import Token
+from trainer.count_utils import get_sa
 from corpus_reader import CorpusReader
-from corpus_reader import File
+from models.models import Corpus
 from gensim.models import KeyedVectors
 
 
-class CreativeTextIdentifier:
-
+class CreativeTextIdentifier(object):
+    # TODO make this class as controller and create creative text identifier class and add to spaCy as extension
+    #  https://spacy.io/usage/processing-pipelines#custom-components-attributes
     def __init__(self,
                  corpus_reader,
                  batch_size=10000,
@@ -18,12 +23,14 @@ class CreativeTextIdentifier:
                  word2vec_path='model/glove.840B.300d.bin',
                  word2vec_coverage=0.5):
         # TODO word2vec coverage in percentage 0-1
+        # TODO word_pair_freq [increase accuracy]
         self.corpus_reader = corpus_reader
         self.batch_size = batch_size
-        self.nlp = spacy.load('en_core_web_sm')
-        self.mini_batch_kmeans = pickle.load(open(kmeans_path, 'rb'))
-        self.word2vec = KeyedVectors.load_word2vec_format(word2vec_path, binary=True, limit=100000)
+        self.nlp = en_core_web_lg.load()
+        # self.mini_batch_kmeans = pickle.load(open(kmeans_path, 'rb'))
+        # self.word2vec = KeyedVectors.load_word2vec_format(word2vec_path, binary=True)
 
+        self.word_pair_freq = pickle.load(open('model/verb_noun_freq_2019-03-17_01-29-19', 'rb'))
         self.nlp.remove_pipe('ner')
 
     def identify(self):
@@ -57,20 +64,20 @@ class CreativeTextIdentifier:
                     logging.debug("===========================================================")
                     logging.debug("Chunk: {}".format(chunk.doc.text))
                     # ==================================================================================
-                    word = chunk.root.text if chunk.root.pos == pron else chunk.root.lemma_
-                    logging.debug("Words: verb:{} noun:{}".format(chunk.root.head.lemma_, word))
-
-                    noun = Word("noun", word, chunk.root.dep_)
-                    verb = Word("verb", chunk.root.head.lemma_)
+                    noun_norm = chunk.root.text if chunk.root.pos == pron else chunk.root.lemma_
+                    noun = Word(noun_norm, chunk.root)
+                    verb = Word(chunk.root.head.lemma_, chunk.root.head)
                     word_pair = WordPair(verb, noun)
+                    logging.debug("Words: verb:{} noun:{}".format(chunk.root.head.lemma_, noun_norm))
                     # ==================================================================================
                     process_begin_time_0 = time.process_time()
                     word_pair = self.w2v(word_pair)
                     logging.debug(
                         "Word vectorized in {} minutes".format((time.process_time() - process_begin_time_0) / 60))
-                    if not word_pair.is_vectorized():
+
+                    if not word_pair.has_vector():
                         logging.debug("Vector not found for verb:{} noun:{}".format(
-                            word_pair.verb.is_vectorized(), word_pair.noun.is_vectorized()))
+                            word_pair.verb.has_vector(), word_pair.noun.has_vector()))
                         continue
                     # ==================================================================================
                     process_begin_time_0 = time.process_time()
@@ -79,12 +86,13 @@ class CreativeTextIdentifier:
                         word_pair.verb.cluster, word_pair.noun.cluster,
                         (time.process_time() - process_begin_time_0) / 60))
                     # ==================================================================================
-                    # process_begin_time_0 = time.process_time()
-                    # sa = get_sa(verb_noun_freq, verb_cluster, noun_cluster)
-                    #
-                    # logging.debug(
-                    #     "SA of words: {} time:{}".format(sa, (time.process_time() - process_begin_time_0) / 60))
-                    # logging.debug("Word Literal: {}".format(sa > 1.32 if sa is not None else "None"))
+                    process_begin_time_0 = time.process_time()
+                    word_pair.sa = get_sa(self.word_pair_freq, word_pair.verb.cluster, word_pair.noun.cluster)
+
+                    logging.debug(
+                        "SA of words: {} time:{}".format(word_pair.sa,
+                                                         (time.process_time() - process_begin_time_0) / 60))
+                    logging.debug("Word Literal: {}".format(word_pair.is_literal()))
 
     def clean_text(self, text):
         text = text.lower()
@@ -104,10 +112,10 @@ class CreativeTextIdentifier:
         :return: vector
         """
         try:
-            vector = self.word2vec.wv.get_vector(word.text)
+            vector = self.word2vec.wv.get_vector(word.text_)
         except KeyError:
             try:
-                similar = self.word2vec.most_similar(word.text, topn=1)
+                similar = self.word2vec.most_similar(word.text_, topn=1)
                 vector = self.word2vec.wv.get_vector(similar[0][0])
             except KeyError:
                 vector = None
@@ -125,27 +133,6 @@ class CreativeTextIdentifier:
         :return: cluster
         """
         return self.mini_batch_kmeans.predict(numpy.array([word.vector]))[0]
-
-
-class WordPair:
-    def __init__(self, verb, noun):
-        self.verb = verb
-        self.noun = noun
-
-    def is_vectorized(self):
-        return self.verb.is_vectorized() and self.noun.is_vectorized()
-
-
-class Word:
-    def __init__(self, type, text, relation=None):
-        self.type = type
-        self.text = text
-        self.relation = relation
-        self.vector = None
-        self.cluster = None
-
-    def is_vectorized(self):
-        return self.vector is not None
 
 
 if __name__ == '__main__':
