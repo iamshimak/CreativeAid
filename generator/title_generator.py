@@ -8,7 +8,7 @@ class TitleGenerator:
         self.corpus_reader = corpus_reader
         self.ratio = title_ratio
 
-    def get_title(self):
+    def generate_title(self):
         for file in self.corpus_reader.files():
             print(summarize(file.contents, ratio=self.ratio, word_count=10))
 
@@ -16,4 +16,4 @@ class TitleGenerator:
 if __name__ == '__main__':
     cr = CorpusReader("../test_corpus/test_title", "")
     title_gen = TitleGenerator(cr)
-    title_gen.get_title()
+    title_gen.generate_title()

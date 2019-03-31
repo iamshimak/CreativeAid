@@ -7,8 +7,8 @@ class Word:
         self.pos_ = doc.pos_
         self.dep = doc.dep
         self.dep_ = doc.dep_
-        self.vector = None
-        self.cluster = None
+        self.vector = doc.vector
+        self.cluster = doc.cluster
 
     def has_vector(self):
         return self.vector is not None
@@ -34,12 +34,41 @@ class WordPair:
 
 
 class Corpus:
-    def __init__(self, name, path):
+    def __init__(self, name, path, encoding=None):
         self.name = name
         self.path = path
         self.contents = ""
 
     def get_contents(self):
         # TODO check the error with read()
-        return open(self.path, encoding="utf-8").read()
+        return open(self.path, encoding='utf-8').read()
         # return open(file.path, encoding=self.encoding).readlines()
+
+    def contents_lines(self):
+        return self.contents.split('\n')
+
+
+class Title(object):
+    def __init__(self, text):
+        self.text = text
+        self.doc = None
+        self.doc_ = None
+        self.important_keyword_indexes = None
+        self.important_keyword_similar_words = {}
+
+    def __iter__(self):
+        return self.doc.__iter__()
+
+    def __getitem__(self, item):
+        return self.doc.__getitem__(item)
+
+    def __len__(self):
+        return self.doc.__len__()
+
+
+class CreativeSentence(object):
+    def __init__(self, doc):
+        self.doc = doc
+        self.nlp_text = None
+        self.text = doc.text
+        self.description = None

@@ -13,6 +13,10 @@ def is_clean(word):
     return word.is_stop or word.is_space or word.pos in [NUM, SYM, PUNCT, DET, CCONJ, CONJ, SCONJ, X]
 
 
+def is_stop(word):
+    return word in STOP_WORDS
+
+
 def clean_sentence(sentence):
     sentence = sentence.lower()
     sentence = ''.join([i for i in sentence if not i.isdigit()])

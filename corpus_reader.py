@@ -1,4 +1,5 @@
 import os
+from models.models import Corpus
 
 
 class CorpusReader:
@@ -8,22 +9,17 @@ class CorpusReader:
         self.encoding = encoding
 
     def files(self):
-        return self.FileIterator(self, self.files_details())
-
-    def get_contents(self, file):
-        # TODO check the error with read()
-        # return open(file.path, encoding="utf-8").read()
-        return open(file.path, encoding=self.encoding).readlines()
+        return self.CorpusIterator(self, self.files_details())
 
     def files_details(self):
         file_col = []
         for root, dirs, files in os.walk(self.root):
             for name in files:
-                file = File(name, os.path.join(root, name))
+                file = Corpus(name, os.path.join(root, name))
                 file_col.append(file)
         return file_col
 
-    class FileIterator:
+    class CorpusIterator:
         def __init__(self, corpus_reader, files):
             self.current = 0
             self.length = len(files)
@@ -38,17 +34,11 @@ class CorpusReader:
                 raise StopIteration
             else:
                 file = self.files[self.current]
-                file.contents = self.corpus_reader.get_contents(file)
+                file.contents = file.get_contents()
                 self.current += 1
                 return file
 
-
-class File:
-    def __init__(self, name, path):
-        self.name = name
-        self.path = path
-        self.contents = ""
-        pass
+        # def __getitem__(self):
 
 
 if __name__ == '__main__':

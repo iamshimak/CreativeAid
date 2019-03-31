@@ -7,20 +7,21 @@ import pickle
 import time
 import logging
 import csv
+from models.models import CreativeSentence, Title
 from corpus_reader import CorpusReader
 from random import randint, choice
 from numpy.linalg import norm
 from spacy.parts_of_speech import *
 from sklearn.metrics.pairwise import cosine_similarity
 from gensim.models import KeyedVectors
-from generator.text_utils import is_clean, clean_sentence, is_qualified
+from generator.text_utils import is_clean, clean_sentence, is_qualified, is_stop
 
 """
 ---------
 Insertion
 ---------
 For the insertions, an adjective (or adverb) k is inserted before the noun (verb) w that appears most often 
-in an appropriate dependency relation with it (i.e. “amod” and “advmod” respectively).
+in an appropriate dependency relation with it (i.e. â€œamodâ€� and â€œadvmodâ€� respectively).
 
 -------------------------------------------
 check cosine similarity of two vector array
@@ -32,20 +33,46 @@ array([[-0.5]])
 
 logging.basicConfig(format=u'[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', level=logging.NOTSET)
 
+word2vec_path = '../trainer/model/glove.840B.300d.bin'
+keywords_path = './model/keywords'
+
 
 class CreativeTextGenerator:
-    def __init__(self,
-                 titles,
-                 corpus_reader,
-                 word2vec_path='../trainer/model/glove.840B.300d.bin',
-                 word2vec_coverage=0.5,
-                 word2vec_limit=500000):
-        self.titles = titles
-        self.corpus_reader = corpus_reader
+    def __init__(self, word2vec_coverage=0.5, word2vec_limit=500000):
         self.nlp = en_core_web_lg.load()
+        self.keyword_coverage = pickle.load(open(keywords_path, 'rb'))
         time_0 = time.time()
         self.word2vec = KeyedVectors.load_word2vec_format(word2vec_path, binary=True, limit=word2vec_limit)
         logging.info(f'Took {time.time() - time_0} seconds to load word2vec-{word2vec_limit}')
+
+    def generate_with_corpus(self, titles, corpus_reader, clean=True, minimum_candidates=10):
+        """
+        Generate creative text for titles from corpus reader
+        :param titles: Title object
+        :param corpus_reader: CorpusReader object
+        :param clean: should clean sentences
+        :param minimum_candidates: minimum candidates amount
+        :return: max scored candidates
+        """
+        lines = []
+        for file in corpus_reader.files():
+            lines += file.contents_lines()
+
+        if clean:
+            lines = [(line.strip(), idx) for idx, line in enumerate(lines) if is_qualified(line.strip())]
+        return self.generate(titles, lines)
+
+    def generate_with_templates(self, titles, templates, clean=True, minimum_candidates=10):
+        """
+        Generate creative text for titles from given templates
+        :param titles: Title object
+        :param clean: should clean sentences
+        :param minimum_candidates: minimum candidates amount
+        :return: max scored candidates
+        """
+        if clean:
+            templates = [(line.strip(), idx) for idx, line in enumerate(templates) if is_qualified(line.strip())]
+        return self.generate(titles, templates)
 
     def enhance_title_info(self, title):
         title.doc = self.nlp(title.text)
@@ -59,31 +86,30 @@ class CreativeTextGenerator:
                 sent.append(word)
 
         title.doc_ = self.nlp(" ".join(sent))
+        return title
 
-    def generate(self):
-        for title in self.titles:
+    def generate(self, titles, templates):
+        candidates = []
+        for title in titles:
             print('==============================================================================')
             print(f'Title: {title.text}\n')
-            self.enhance_title_info(title)
-            creative_sentences = self.search_candidate_creative_sentences(title)
+            title = self.enhance_title_info(title)
+            creative_sentences = self.search_candidate_creative_sentences(title, templates)
             for creative_sentence in creative_sentences:
                 v, replaced, inserted = self.generate_creative_sentence(creative_sentence, title)
                 if replaced or inserted:
+                    candidates.append(creative_sentence.text)
                     print(
                         f"template:{creative_sentence.text} | modified:{v} | replaced:{replaced} | inserted:{inserted}")
+        return candidates
 
-    def search_candidate_creative_sentences(self, title, additional_sentences=None):
-        lines = []
-        for file in self.corpus_reader.files():
-            lines += file.contents_lines()
-        lines = [(line.strip(), idx) for idx, line in enumerate(lines) if is_qualified(line.strip())]
-
+    def search_candidate_creative_sentences(self, title, templates, additional_sentences=None):
         candidate_lines = []
-        for sentence, _ in self.nlp.pipe(lines, as_tuples=True, batch_size=10000):
+        for sentence, _ in self.nlp.pipe(templates, as_tuples=True, batch_size=10000):
             sentence = CreativeSentence(sentence)
             sentence.nlp_text = self.nlp(clean_sentence(sentence.doc.text))
 
-            sentence_similarity_score = self.doc_score(title, sentence)
+            sentence_similarity_score = self.template_score(title, sentence)
             keyword_score = self.keyword_score(title, sentence)
 
             if sentence_similarity_score >= 0.5 and keyword_score >= 0.5:
@@ -93,7 +119,7 @@ class CreativeTextGenerator:
         candidate_lines = [candidate for _, candidate in candidate_lines]
         return candidate_lines
 
-    def doc_score(self, title, sentence):
+    def template_score(self, title, sentence):
         sentence_similarity_score = 0
         if title.doc.has_vector and sentence.nlp_text.has_vector:
             sentence_similarity_score = title.doc.similarity(sentence.nlp_text)
@@ -162,24 +188,37 @@ class CreativeTextGenerator:
 
         return " ".join(sent.text for sent in sent), len(replace_words) > 0, len(insertion_words) > 0
 
-    # def remove_unwanted_words(self, tokens):
-    #     words = []
-    #     for token in tokens:
-    #         if not token.is_stop or not token.is_space:
-    #             words.append(token)
-
     def important_keywords_indexes(self, tokens):
-        #  TODO implement token.ent_type_ NER
+        i = -1
         keyword_index = []
-        random_counts = len(tokens) - 1
-        idx = list(range(0, random_counts))
-        for i in range(0, random_counts):
-            val = choice(idx)
-            idx.remove(val)
-            if not tokens.doc[val].is_stop or not tokens.doc[val].is_space:
-                keyword_index.append(val)
+        for token in tokens:
+            i += 1
+            try:
+                if is_clean(token):
+                    continue
+                word = token.text if token.pos in [PRON, ADJ] else token.lemma_
+                val = self.keyword_coverage[word.lower()]
+                score = val / 1493775
+                if score > 0.02:
+                    keyword_index.append(i)
+            except KeyError:
+                pass
+            # TODO add socre in IF
+            if token.ent_type != 0 and i not in keyword_index:
+                keyword_index.append(i)
 
         return keyword_index
+
+        # keyword_index = []
+        # random_counts = len(tokens) - 1
+        # idx = list(range(0, random_counts))
+        # for i in range(0, random_counts):
+        #     val = choice(idx)
+        #     idx.remove(val)
+        #     if not tokens.doc[val].is_stop or not tokens.doc[val].is_space:
+        #         keyword_index.append(val)
+        #
+        # return keyword_index
         # return [17, 6, 10]
 
     def similar_keywords_for_indexes(self, title):
@@ -199,32 +238,6 @@ class CreativeTextGenerator:
         return similar_words_for_indexes
 
 
-class Title(object):
-    def __init__(self, text):
-        self.text = text
-        self.doc = None
-        self.doc_ = None
-        self.important_keyword_indexes = None
-        self.important_keyword_similar_words = {}
-
-    def __iter__(self):
-        return self.doc.__iter__()
-
-    def __getitem__(self, item):
-        return self.doc.__getitem__(item)
-
-    def __len__(self):
-        return self.doc.__len__()
-
-
-class CreativeSentence(object):
-    def __init__(self, doc):
-        self.doc = doc
-        self.nlp_text = None
-        self.text = doc.text
-        self.description = None
-
-
 if __name__ == '__main__':
     # titles = []
     # with open('C:/Users/ShimaK/PycharmProjects/CreativeAid!/test_corpus/test_title/titles/abcnews-date-text.csv') \
@@ -240,5 +253,5 @@ if __name__ == '__main__':
     title = Title('The Obama administration is planning to issue a final rule designed to enhance the safety of '
                   'offshore oil drilling equipment')
     cr = CorpusReader("C:/Users/ShimaK/PycharmProjects/CreativeAid!/test_corpus/test_generate_corpus/cliche", "")
-    ctg = CreativeTextGenerator([title], cr)
-    ctg.generate()
+    ctg = CreativeTextGenerator()
+    ctg.generate_with_corpus([title], cr)

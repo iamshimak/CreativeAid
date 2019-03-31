@@ -5,8 +5,8 @@ import numpy
 import string
 import logging
 import en_core_web_lg
+from spacy.parts_of_speech import *
 from models.models import Word, WordPair
-from spacy.tokens import Token
 from trainer.count_utils import get_sa
 from corpus_reader import CorpusReader
 from models.models import Corpus
@@ -30,7 +30,7 @@ class CreativeTextIdentifier(object):
         # self.mini_batch_kmeans = pickle.load(open(kmeans_path, 'rb'))
         # self.word2vec = KeyedVectors.load_word2vec_format(word2vec_path, binary=True)
 
-        self.word_pair_freq = pickle.load(open('model/verb_noun_freq_2019-03-17_01-29-19', 'rb'))
+        self.word_pair_freq = pickle.load(open('model/verb_noun_freq_2019-03-27_23-31-01', 'rb'))
         self.nlp.remove_pipe('ner')
 
     def identify(self):
@@ -38,40 +38,41 @@ class CreativeTextIdentifier(object):
         Begin creative text identification
         :return:
         """
-        for file in self.files_for_identification(self.corpus_reader.files()):
+        for file in self.corpus_reader.files():
             self.creative_text_for_file(file)
 
-    def files_for_identification(self, files):
-        """
-        Override the method exclude include files
-        :param files: [File]
-        :return: [File]
-        """
-        return files
+    # def files_for_identification(self, files):
+    #     """
+    #     Override the method exclude include files
+    #     :param files: [File]
+    #     :return: [File]
+    #     """
+    #     return files
 
     def creative_text_for_file(self, file):
         # TODO clean text
         # check for values its different with versions
         nsubj = 429
         dobj = 416
-        verb = 100
-        pron = 95
 
-        clean_sentences = [self.clean_text(s) for s in file.contents]
-        for doc in self.nlp.pipe(clean_sentences, batch_size=self.batch_size):
-            for chunk in doc.noun_chunks:
-                if chunk.root.head.pos == verb or (chunk.root.dep == nsubj or chunk.root.dep == dobj):
+        lines = file.contents_lines()
+        lines = [(line.strip(), idx) for idx, line in enumerate(lines)]
+        for sentence, _ in self.nlp.pipe(lines, as_tuples=True):
+            for chunk in sentence.noun_chunks:
+                # TODO get average SA score for sentence and decide sentence is literal
+                # TODO verb-verb and noun noun relation ?
+                if chunk.root.head.pos == VERB or (chunk.root.dep == nsubj or chunk.root.dep == dobj):
                     logging.debug("===========================================================")
                     logging.debug("Chunk: {}".format(chunk.doc.text))
                     # ==================================================================================
-                    noun_norm = chunk.root.text if chunk.root.pos == pron else chunk.root.lemma_
+                    noun_norm = chunk.root.text if chunk.root.pos == PRON else chunk.root.lemma_
                     noun = Word(noun_norm, chunk.root)
                     verb = Word(chunk.root.head.lemma_, chunk.root.head)
                     word_pair = WordPair(verb, noun)
                     logging.debug("Words: verb:{} noun:{}".format(chunk.root.head.lemma_, noun_norm))
                     # ==================================================================================
                     process_begin_time_0 = time.process_time()
-                    word_pair = self.w2v(word_pair)
+                    # word_pair = self.w2v(word_pair)
                     logging.debug(
                         "Word vectorized in {} minutes".format((time.process_time() - process_begin_time_0) / 60))
 
@@ -81,7 +82,7 @@ class CreativeTextIdentifier(object):
                         continue
                     # ==================================================================================
                     process_begin_time_0 = time.process_time()
-                    word_pair = self.v2c(word_pair)
+                    # word_pair = self.v2c(word_pair)
                     logging.debug("Words Clusters: verb:{} noun:{} time:{}".format(
                         word_pair.verb.cluster, word_pair.noun.cluster,
                         (time.process_time() - process_begin_time_0) / 60))
@@ -136,6 +137,6 @@ class CreativeTextIdentifier(object):
 
 
 if __name__ == '__main__':
-    cr = CorpusReader("C:/Users/ShimaK/PycharmProjects/Test", "")
+    cr = CorpusReader("C:/Users/ShimaK/PycharmProjects/CreativeAid!/test_corpus/test_generate_corpus/cliche", "")
     ti = CreativeTextIdentifier(cr)
     ti.identify()
