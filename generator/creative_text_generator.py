@@ -23,7 +23,7 @@ Insertion
 For the insertions, an adjective (or adverb) k is inserted before the noun (verb) w that appears most often 
 in an appropriate dependency relation with it (i.e. â€œamodâ€� and â€œadvmodâ€� respectively).
 
--------------------------------------------
+------------------from generator.text_utils import is_clean, clean_sentence, is_qualified, is_stop-------------------------
 check cosine similarity of two vector array
 -------------------------------------------
 from sklearn.metrics.pairwise import cosine_similarity
@@ -33,8 +33,8 @@ array([[-0.5]])
 
 logging.basicConfig(format=u'[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', level=logging.NOTSET)
 
-word2vec_path = '../trainer/model/glove.840B.300d.bin'
-keywords_path = './model/keywords'
+word2vec_path = 'trainer/model/glove.840B.300d.bin'
+keywords_path = 'keywords'
 
 
 class CreativeTextGenerator:
@@ -45,6 +45,9 @@ class CreativeTextGenerator:
         self.word2vec = KeyedVectors.load_word2vec_format(word2vec_path, binary=True, limit=word2vec_limit)
         logging.info(f'Took {time.time() - time_0} seconds to load word2vec-{word2vec_limit}')
 
+    def _clean(self, templates):
+        return [(line.text.strip(), idx) for idx, line in enumerate(templates) if is_qualified(line.text.strip())]
+
     def generate_with_corpus(self, titles, corpus_reader, clean=True, minimum_candidates=10):
         """
         Generate creative text for titles from corpus reader
@@ -54,13 +57,15 @@ class CreativeTextGenerator:
         :param minimum_candidates: minimum candidates amount
         :return: max scored candidates
         """
-        lines = []
-        for file in corpus_reader.files():
-            lines += file.contents_lines()
 
+        templates = []
+        for file in corpus_reader.corpus():
+            templates += file.contents_lines()
+
+        titles = [Title(title) for title in titles]
         if clean:
-            lines = [(line.strip(), idx) for idx, line in enumerate(lines) if is_qualified(line.strip())]
-        return self.generate(titles, lines)
+            templates = self._clean(templates)
+        return self.generate(titles, templates)
 
     def generate_with_templates(self, titles, templates, clean=True, minimum_candidates=10):
         """
@@ -70,8 +75,11 @@ class CreativeTextGenerator:
         :param minimum_candidates: minimum candidates amount
         :return: max scored candidates
         """
+        if type(titles[0]) is not Title:
+            titles = [Title(title) for title in titles]
+
         if clean:
-            templates = [(line.strip(), idx) for idx, line in enumerate(templates) if is_qualified(line.strip())]
+            templates = self._clean(templates)
         return self.generate(titles, templates)
 
     def enhance_title_info(self, title):
@@ -96,7 +104,7 @@ class CreativeTextGenerator:
             title = self.enhance_title_info(title)
             creative_sentences = self.search_candidate_creative_sentences(title, templates)
             for creative_sentence in creative_sentences:
-                v, replaced, inserted = self.generate_creative_sentence(creative_sentence, title)
+                v, replaced, inserted = self.lexical_substitution(creative_sentence, title)
                 if replaced or inserted:
                     candidates.append(creative_sentence.text)
                     print(
@@ -105,25 +113,25 @@ class CreativeTextGenerator:
 
     def search_candidate_creative_sentences(self, title, templates, additional_sentences=None):
         candidate_lines = []
-        for sentence, _ in self.nlp.pipe(templates, as_tuples=True, batch_size=10000):
-            sentence = CreativeSentence(sentence)
-            sentence.nlp_text = self.nlp(clean_sentence(sentence.doc.text))
+        for template, _ in self.nlp.pipe(templates, as_tuples=True, batch_size=10000):
+            template = CreativeSentence(template)
+            template.nlp_text = self.nlp(clean_sentence(template.doc.text))
 
-            sentence_similarity_score = self.template_score(title, sentence)
-            keyword_score = self.keyword_score(title, sentence)
+            sentence_similarity_score = self.title_sentence_similarity(title, template)
+            keyword_score = self.keyword_score(title, template)
 
             if sentence_similarity_score >= 0.5 and keyword_score >= 0.5:
-                candidate_lines.append(((sentence_similarity_score + keyword_score) / 2, sentence))
+                candidate_lines.append(((sentence_similarity_score + keyword_score) / 2, template))
 
         candidate_lines = sorted(candidate_lines, key=lambda tup: tup[0], reverse=True)
         candidate_lines = [candidate for _, candidate in candidate_lines]
         return candidate_lines
 
-    def template_score(self, title, sentence):
-        sentence_similarity_score = 0
+    def title_sentence_similarity(self, title, sentence):
+        similarity_score = 0
         if title.doc.has_vector and sentence.nlp_text.has_vector:
-            sentence_similarity_score = title.doc.similarity(sentence.nlp_text)
-        return sentence_similarity_score
+            similarity_score = title.doc.similarity(sentence.nlp_text)
+        return similarity_score
 
     def keyword_score(self, title, sentence):
         # TODO look again
@@ -147,7 +155,7 @@ class CreativeTextGenerator:
 
         return token_score / i if token_score != 0 else 0
 
-    def generate_creative_sentence(self, temple_sentence, title):
+    def lexical_substitution(self, temple_sentence, title):
         important_keywords = title.important_keyword_indexes
         replace_words = {}
         insertion_words = {}
@@ -157,6 +165,7 @@ class CreativeTextGenerator:
             if is_clean(title_token):
                 continue
             # TODO check a word is already replaced
+            # TODO check the word in different form
             i = 0
             for token in temple_sentence.doc:
                 if is_clean(token):

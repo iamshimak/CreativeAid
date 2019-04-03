@@ -8,10 +8,10 @@ class CorpusReader:
         self.fields = fields
         self.encoding = encoding
 
-    def files(self):
-        return self.CorpusIterator(self, self.files_details())
+    def corpus(self):
+        return self.CorpusIterator(self, self.corpus_files())
 
-    def files_details(self):
+    def corpus_files(self):
         file_col = []
         for root, dirs, files in os.walk(self.root):
             for name in files:
@@ -43,7 +43,7 @@ class CorpusReader:
 
 if __name__ == '__main__':
     corpus_reader = CorpusReader("../Test", "")
-    files = corpus_reader.files()
+    files = corpus_reader.corpus()
     for file in files:
         print(file.contents)
-    print(corpus_reader.files_details())
+    print(corpus_reader.corpus_files())

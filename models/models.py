@@ -63,7 +63,7 @@ class Title(object):
         return self.doc.__getitem__(item)
 
     def __len__(self):
-        return self.doc.__len__()
+        return len(self.text)
 
 
 class CreativeSentence(object):

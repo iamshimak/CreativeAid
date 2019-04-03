@@ -9,7 +9,7 @@ setup(
     author_email='shimak2013@gmail.com',
     scripts=['creativeaid'],
     install_requires=[],
-    packages=find_packages(),
+    packages=['trainer', 'generator', 'models'],
     description='Creative title generation framework',
     cmdclass={
         # 'install': DownloadGloveModel
