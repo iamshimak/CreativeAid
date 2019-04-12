@@ -1,4 +1,4 @@
-class Word:
+class Token:
     def __init__(self, text_, doc):
         self.text_ = text_
         self.text = doc.text
@@ -20,6 +20,7 @@ class WordPair:
     def __init__(self, verb, noun):
         self.verb = verb
         self.noun = noun
+        self.sps = None
         self.sa = None
 
     def has_vector(self):
@@ -66,9 +67,16 @@ class Title(object):
         return len(self.text)
 
 
-class CreativeSentence(object):
+class Template(object):
     def __init__(self, doc):
         self.doc = doc
         self.nlp_text = None
         self.text = doc.text
         self.description = None
+
+
+class CreativeSentence(object):
+    def __init__(self, title, template, text):
+        self.title = title
+        self.template = template
+        self.text = text

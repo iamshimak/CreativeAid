@@ -7,9 +7,8 @@ setup(
     version='0.3.4',
     author='Ahamed Shimak',
     author_email='shimak2013@gmail.com',
-    scripts=['creativeaid'],
-    install_requires=[],
-    packages=['trainer', 'generator', 'models'],
+    install_requires=['spacy', 'gensim'],
+    packages=find_packages(exclude=[]),
     description='Creative title generation framework',
     cmdclass={
         # 'install': DownloadGloveModel

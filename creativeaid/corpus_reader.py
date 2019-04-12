@@ -1,5 +1,5 @@
 import os
-from models.models import Corpus
+from creativeaid.models.models import Corpus
 
 
 class CorpusReader:

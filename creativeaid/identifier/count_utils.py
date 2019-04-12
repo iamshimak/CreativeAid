@@ -106,7 +106,7 @@ def get_sps(d, verb, noun_totals=[], noun_sum=None):
     return SPS
 
 
-def get_sa(d, verb, noun, noun_totals=[], noun_sum=None):
+def get_sa(d, verb, noun, noun_totals=[], noun_sum=None, sps=None):
     """Calculates and returns SA(verb)"""
     try:  # If it never occurs in the corpus, return None
         d[verb][noun]
