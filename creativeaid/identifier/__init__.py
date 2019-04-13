@@ -1,0 +1,1 @@
+from creativeaid.identifier.creative_text_identifier import CreativeTextIdentifier

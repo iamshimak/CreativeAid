@@ -86,7 +86,7 @@ def get_noun_prob(noun, noun_totals, noun_sum):
     return noun_totals[noun] / noun_sum
 
 
-def get_sps(d, verb, noun_totals=[], noun_sum=None):
+def get_sps(d, verb, noun_totals=None, noun_sum=None):
     """Calculates and returns SPS(verb)"""
     try:  # If it never occurs in the corpus, return None
         d[verb]
@@ -106,7 +106,7 @@ def get_sps(d, verb, noun_totals=[], noun_sum=None):
     return SPS
 
 
-def get_sa(d, verb, noun, noun_totals=[], noun_sum=None, sps=None):
+def get_sa(d, verb, noun, noun_totals=None, noun_sum=None, sps=None):
     """Calculates and returns SA(verb)"""
     try:  # If it never occurs in the corpus, return None
         d[verb][noun]
@@ -122,7 +122,7 @@ def get_sa(d, verb, noun, noun_totals=[], noun_sum=None, sps=None):
     return SA
 
 
-def print_metrics(d, verb, noun, noun_totals=[], noun_sum=None):
+def print_metrics(d, verb, noun, noun_totals=None, noun_sum=None):
     """Returns conditional probability, SPS and SA"""
     if not noun_sum:
         noun_sum = retrieve_noun_sum(d)
@@ -142,7 +142,7 @@ def print_metrics(d, verb, noun, noun_totals=[], noun_sum=None):
     print('')
 
 
-def get_metrics(d, verb, noun, noun_totals=[], noun_sum=None):
+def get_metrics(d, verb, noun, noun_totals=None, noun_sum=None):
     """Returns conditional probability, SPS and SA"""
     if not noun_sum:
         noun_sum = retrieve_noun_sum(d)

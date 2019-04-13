@@ -5,7 +5,7 @@ import string
 import logging
 import os
 from spacy.parts_of_speech import *
-from creativeaid.nlp.nlp import NLP
+from creativeaid.nlp import NLP
 from creativeaid.models.models import Token, WordPair
 from creativeaid.identifier.count_utils import get_sa, get_sps
 from creativeaid.corpus_reader import CorpusReader
@@ -16,11 +16,11 @@ class CreativeTextIdentifier(object):
     # TODO make this class as controller and create creative text identifier class and add to spaCy as extension
     #  https://spacy.io/usage/processing-pipelines#custom-components-attributes
 
-    def __init__(self, kmeans_path='model/mini_batch_kmeans'):
+    def __init__(self, nlp, kmeans_path='model/mini_batch_kmeans'):
         logging.info(f'directory: {os.path.dirname(os.path.realpath(__file__))}')
         # TODO word2vec coverage in percentage 0-1
         # TODO word_pair_freq [increase accuracy]
-        self.nlp = NLP()
+        self.nlp = nlp
         # self.mini_batch_kmeans = pickle.load(open(kmeans_path, 'rb'))
         self.word_pair_freq = pickle.load(open('verb_noun_freq_2019-03-27_23-31-01', 'rb'))
 
@@ -105,5 +105,5 @@ class CreativeTextIdentifier(object):
 if __name__ == '__main__':
     cr = CorpusReader(
         "C:/Users/ShimaK/PycharmProjects/CreativeAid!/creativeaid/test_corpus/test_generate_corpus/cliche", "")
-    ti = CreativeTextIdentifier()
+    ti = CreativeTextIdentifier(NLP())
     ti.identify_with_corpus(cr)
