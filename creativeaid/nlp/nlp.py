@@ -1,17 +1,38 @@
+import time
+import logging
 import en_core_web_lg
 from gensim.models import KeyedVectors
+from creativeaid.nlp.lexsub import LexSub
 
 
 class NLP:
 
     def __init__(self,
-                 word2vec_path='model/glove.840B.300d.bin',
+                 word2vec_path='../identifier/model/glove.840B.300d.bin',
+                 word2vec_limit=500000,
                  word2vec_coverage=0.5):
         self.nlp = en_core_web_lg.load()
-        # self.word2vec = KeyedVectors.load_word2vec_format(word2vec_path, binary=True)
+        time_0 = time.time()
+        self.word2vec = KeyedVectors.load_word2vec_format(word2vec_path, binary=True, limit=word2vec_limit)
+        logging.info(f'Took {time.time() - time_0} seconds to load word2vec-{word2vec_limit}')
+        self.lexsub = LexSub(self.word2vec, candidate_generator='word2vec')
+
+    @property
+    def vocab(self):
+        return self.nlp.vocab
 
     def pars_document(self, sentences, as_tuples=False):
         return self.nlp.pipe(sentences, as_tuples=as_tuples)
+
+    def pars_sentence(self, sentence):
+        return self.nlp(sentence)
+
+    def similar_word(self, word, topn=10):
+        return self.word2vec.most_similar(word, topn=topn)
+
+    def similar_word_for_sentence(self, word, sentence):
+        result = self.lexsub.lex_sub(f"{word}.n", sentence)
+        return result
 
     def w2v(self, word_pair):
         word_pair.verb.vector = self._w2v(word_pair.verb)
