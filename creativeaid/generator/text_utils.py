@@ -3,14 +3,14 @@ from spacy.lang.en.stop_words import STOP_WORDS
 from spacy.parts_of_speech import *
 
 
-def is_clean(word):
+def is_valid(word):
     """
     Check word proper input for NLP process
     https://spacy.io/api/annotation#pos-tagging
     :param word: spacy token
     :return: Boolean
     """
-    return word.is_stop or word.is_space or word.pos in [NUM, SYM, PUNCT, DET, CCONJ, CONJ, SCONJ, X]
+    return not (word.is_stop or word.is_space or word.pos in [NUM, SYM, PUNCT, DET, CCONJ, CONJ, SCONJ, X])
 
 
 def is_stop(word):
