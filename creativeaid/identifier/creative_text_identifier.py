@@ -78,10 +78,10 @@ class CreativeTextIdentifier(object):
                 # ==================================================================================
                 process_begin_time_0 = time.process_time()
                 # SPS identification
-                # word_pair.sps = elf.word_freq.get_sps(word_pair.verb.cluster)
+                # word_pair.sps = elf.word_freq.sps(word_pair.verb.cluster)
 
                 # SA identification
-                word_pair.sa = self.word_freq.get_sa(word_pair.verb.cluster, word_pair.noun.cluster)
+                word_pair.sa = self.word_freq.sa(word_pair.verb.cluster, word_pair.noun.cluster)
                 if not word_pair.is_literal():
                     creative_sentences.append(sentence)
 
