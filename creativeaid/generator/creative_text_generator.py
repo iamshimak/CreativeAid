@@ -3,7 +3,7 @@ import pickle
 from sklearn.metrics.pairwise import cosine_similarity
 from spacy.parts_of_speech import *
 from creativeaid.corpus_reader import CorpusReader
-from creativeaid.generator.text_utils import is_valid, clean_sentence, is_qualified
+from creativeaid.nlp.text_utils import is_valid, clean_sentence, is_qualified
 from creativeaid.models import Template, Title
 from creativeaid.nlp import NLP
 

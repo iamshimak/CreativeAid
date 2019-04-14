@@ -10,12 +10,13 @@ class NLP:
     def __init__(self,
                  word2vec_path='../identifier/model/glove.840B.300d.bin',
                  word2vec_limit=500000,
-                 word2vec_coverage=0.5):
+                 word2vec_coverage=0.5, requires_word2vec=False):
         self.nlp = en_core_web_lg.load()
-        time_0 = time.time()
-        self.word2vec = KeyedVectors.load_word2vec_format(word2vec_path, binary=True, limit=word2vec_limit)
-        logging.info(f'Took {time.time() - time_0} seconds to load word2vec-{word2vec_limit}')
-        self.lexsub = LexSub(self.word2vec, candidate_generator='word2vec')
+        if requires_word2vec:
+            time_0 = time.time()
+            self.word2vec = KeyedVectors.load_word2vec_format(word2vec_path, binary=True, limit=word2vec_limit)
+            logging.info(f'Took {time.time() - time_0} seconds to load word2vec-{word2vec_limit}')
+            self.lexsub = LexSub(self.word2vec, candidate_generator='word2vec')
 
     @property
     def vocab(self):

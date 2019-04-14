@@ -1,28 +1,32 @@
 import pickle
 import time
 import numpy
-import string
 import logging
 import os
 from spacy.parts_of_speech import *
+
+from creativeaid.identifier.word_frequency import WordFrequency
 from creativeaid.nlp import NLP
-from creativeaid.models.models import Token, WordPair
-from creativeaid.identifier.count_utils import get_sa, get_sps
+from creativeaid.models import Token, WordPair
 from creativeaid.corpus_reader import CorpusReader
-from creativeaid.generator.text_utils import is_qualified
+from creativeaid.nlp.text_utils import is_qualified
+
+logging.basicConfig(format=u'[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', level=logging.NOTSET)
+
+kmeans_path = 'model/mini_batch_kmeans'
 
 
 class CreativeTextIdentifier(object):
     # TODO make this class as controller and create creative text identifier class and add to spaCy as extension
     #  https://spacy.io/usage/processing-pipelines#custom-components-attributes
 
-    def __init__(self, nlp, kmeans_path='model/mini_batch_kmeans'):
+    def __init__(self, nlp):
         logging.info(f'directory: {os.path.dirname(os.path.realpath(__file__))}')
         # TODO word2vec coverage in percentage 0-1
         # TODO word_pair_freq [increase accuracy]
         self.nlp = nlp
         # self.mini_batch_kmeans = pickle.load(open(kmeans_path, 'rb'))
-        self.word_pair_freq = pickle.load(open('verb_noun_freq_2019-03-27_23-31-01', 'rb'))
+        self.word_freq = WordFrequency(pickle.load(open('verb_noun_freq_2019-03-27_23-31-01', 'rb')))
 
     def identify_with_corpus(self, corpus_reader):
         sentences = []
@@ -74,10 +78,10 @@ class CreativeTextIdentifier(object):
                 # ==================================================================================
                 process_begin_time_0 = time.process_time()
                 # SPS identification
-                # word_pair.sps = get_sps(self.word_pair_freq, word_pair.verb.cluster)
+                # word_pair.sps = elf.word_freq.get_sps(word_pair.verb.cluster)
 
                 # SA identification
-                word_pair.sa = get_sa(self.word_pair_freq, word_pair.verb.cluster, word_pair.noun.cluster)
+                word_pair.sa = self.word_freq.get_sa(word_pair.verb.cluster, word_pair.noun.cluster)
                 if not word_pair.is_literal():
                     creative_sentences.append(sentence)
 

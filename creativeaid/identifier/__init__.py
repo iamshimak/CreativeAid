@@ -1,1 +1,2 @@
 from creativeaid.identifier.creative_text_identifier import CreativeTextIdentifier
+from creativeaid.identifier.word_frequency import WordFrequency
