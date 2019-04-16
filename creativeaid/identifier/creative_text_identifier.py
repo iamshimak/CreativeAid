@@ -14,6 +14,7 @@ from creativeaid.nlp.text_utils import is_qualified
 logging.basicConfig(format=u'[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', level=logging.NOTSET)
 
 kmeans_path = 'model/mini_batch_kmeans'
+word_freq_path = 'verb_noun_freq_2019-03-27_23-31-01'
 
 
 class CreativeTextIdentifier(object):
@@ -26,7 +27,7 @@ class CreativeTextIdentifier(object):
         # TODO word_pair_freq [increase accuracy]
         self.nlp = nlp
         # self.mini_batch_kmeans = pickle.load(open(kmeans_path, 'rb'))
-        self.word_freq = WordFrequency(pickle.load(open('verb_noun_freq_2019-03-27_23-31-01', 'rb')))
+        self.word_freq = WordFrequency(pickle.load(open(word_freq_path, 'rb')))
 
     def identify_with_corpus(self, corpus_reader):
         sentences = []

@@ -27,7 +27,7 @@ logging.basicConfig(format=u'[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %
 keywords_path = 'model/keywords'
 
 
-class CreativeTextGenerator:
+class CreativeTitleGenerator:
     def __init__(self, nlp):
         self.nlp = nlp
         self.keyword_coverage = pickle.load(open(keywords_path, 'rb'))
@@ -246,5 +246,5 @@ if __name__ == '__main__':
                   'offshore oil drilling equipment')
     cr = CorpusReader(
         "C:/Users/ShimaK/PycharmProjects/CreativeAid!/creativeaid/test_corpus/test_generate_corpus/cliche", "")
-    ctg = CreativeTextGenerator(NLP())
+    ctg = CreativeTitleGenerator(NLP())
     ctg.generate_with_corpus([title], cr)

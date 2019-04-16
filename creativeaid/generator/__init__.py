@@ -1,2 +1,2 @@
-from creativeaid.generator.creative_text_generator import CreativeTextGenerator
+from creativeaid.generator.creative_title_generator import CreativeTitleGenerator
 from creativeaid.generator.title_generator import TitleGenerator
