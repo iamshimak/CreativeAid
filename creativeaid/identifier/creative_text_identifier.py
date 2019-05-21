@@ -8,7 +8,7 @@ from spacy.tokens import Doc, Span, Token
 
 from creativeaid.identifier.word_frequency import WordFrequency
 from creativeaid.nlp import NLP
-from creativeaid.models import Token, WordPair
+from creativeaid.models import Token, WordPair, CreativeSentence
 from creativeaid.corpus_reader import CorpusReader
 from creativeaid.nlp.text_utils import is_qualified
 
@@ -19,19 +19,22 @@ word_freq_path = 'verb_noun_freq_2019-03-27_23-31-01'
 
 
 class CreativeTextIdentifier(object):
-    # TODO make this class as controller and create creative text identifier class and add to spaCy as extension
-    #  https://spacy.io/usage/processing-pipelines#custom-components-attributes
 
-    def __init__(self, nlp, word_freq=None):
-        logging.info(f'directory: {os.path.dirname(os.path.realpath(__file__))}')
-        # TODO word2vec coverage in percentage 0-1
-        # TODO word_pair_freq [increase accuracy]
+    def __init__(self, nlp, word_freq=None, kmeans=None):
         self.nlp = nlp
-        self.mini_batch_kmeans = pickle.load(open(kmeans_path, 'rb'))
+
+        if kmeans is None:
+            self.mini_batch_kmeans = pickle.load(open(kmeans_path, 'rb'))
+        else:
+            self.mini_batch_kmeans = kmeans
+
         if word_freq is None:
             self.word_freq = WordFrequency(pickle.load(open(word_freq_path, 'rb')))
         else:
             self.word_freq = WordFrequency(word_freq)
+
+        # Register attribute on the Span. We'll be overwriting this on __call__
+        Doc.set_extension("word_pair", default=None)
 
     def identify_with_corpus(self, corpus_reader):
         sentences = []
@@ -43,19 +46,19 @@ class CreativeTextIdentifier(object):
         return self._identify(sentences)
 
     def _identify(self, sentences):
-        pipe = CreativeTextIdentifierPipe()
+        pipe = CreativeTextIdentifierPipe(self.word_freq)
 
         sentences = [(line.strip(), idx) for idx, line in enumerate(sentences) if is_qualified(line.strip())]
-        creative_titles = []
+        creative_sentences = []
         for sentence, _ in self.nlp.pars_document(sentences,
                                                   as_tuples=True,
                                                   pipe=pipe,
                                                   name="creative_text_identifier"):
             word_pair = sentence._.word_pair
-            if not word_pair.is_literal:
-                creative_titles.append(sentence)
+            if word_pair is not None and not word_pair.is_literal:
+                creative_sentence = CreativeSentence(sentence.text, sentence, word_pair)
+                creative_sentences.append(creative_sentence)
 
-        creative_sentences = []
         return creative_sentences
 
     def v2c(self, word_pair):
@@ -75,11 +78,8 @@ class CreativeTextIdentifier(object):
 class CreativeTextIdentifierPipe(object):
     name = "creative_text_identifier"  # component name, will show up in the pipeline
 
-    def __init__(self):
-        # self.nlp = nlp
-        self.word_freq = WordFrequency(pickle.load(open(word_freq_path, 'rb')))
-        # Register attribute on the Span. We'll be overwriting this on __call__
-        Doc.set_extension("word_pair", default=None)
+    def __init__(self, word_freq):
+        self.word_freq = word_freq
 
     def __call__(self, doc):
         NSUBJ = 429
@@ -126,7 +126,7 @@ if __name__ == '__main__':
     process_begin_time_0 = time.process_time()
 
     # corpus_reader = CorpusReader("./creativeaid/test_corpus/test_generate_corpus/cliche", "")
-    text_identifier = CreativeTextIdentifier(NLP(requires_word2vec=True))
+    text_identifier = CreativeTextIdentifier(NLP())
 
     logging.debug(f"Loading Time {(time.process_time() - process_begin_time_0) / 60}")
     logging.debug(f"================================================================")
