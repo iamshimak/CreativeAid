@@ -4,7 +4,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from spacy.parts_of_speech import *
 from creativeaid.corpus_reader import CorpusReader
 from creativeaid.nlp.text_utils import is_valid, clean_sentence, is_qualified
-from creativeaid.models import Template, Title
+from creativeaid.models import Template, Title, CreativeTitle
 from creativeaid.nlp import NLP
 
 """
@@ -25,12 +25,17 @@ array([[-0.5]])
 logging.basicConfig(format=u'[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', level=logging.NOTSET)
 
 keywords_path = 'model/keywords'
+headline_count = 1493775
+keyword_threshold = 0.02
 
 
 class CreativeTitleGenerator:
-    def __init__(self, nlp):
+    def __init__(self, nlp, keyword_coverage=None):
         self.nlp = nlp
-        self.keyword_coverage = pickle.load(open(keywords_path, 'rb'))
+        if keyword_coverage is None:
+            self.word_coverage = pickle.load(open(keywords_path, 'rb'))
+        else:
+            self.word_coverage = keyword_coverage
 
     def _clean(self, templates):
         return [(line.strip(), idx) for idx, line in enumerate(templates) if is_qualified(line.strip())]
@@ -88,22 +93,23 @@ class CreativeTitleGenerator:
     def generate(self, titles, templates):
         candidates = []
         for title in titles:
-            print('==============================================================================')
-            print(f'Title: {title.text}\n')
+            logging.debug('==============================================================================')
+            logging.debug(f'Title: {title.text}\n')
             title = self.enhance_title_info(title)
             creative_sentences = self.search_candidates_for_creative_sentences(title, templates)
             for creative_sentence in creative_sentences:
                 v, replaced, inserted = self.substitute_words(creative_sentence, title)
                 if replaced or inserted:
-                    candidates.append(creative_sentence.text)
-                    print(
+                    creative_title = CreativeTitle(title, creative_sentence, v)
+                    candidates.append(creative_title)
+                    logging.debug(
                         f"template:{creative_sentence.text} | modified:{v} | replaced:{replaced} | inserted:{inserted}")
         return candidates
 
     def search_candidates_for_creative_sentences(self, title, templates):
         candidate_templates = []
         for template, _ in self.nlp.pars_document(templates, as_tuples=True):
-            template = Template(template)
+            template = Template(template, template.text)
             template.nlp_text = self.nlp.pars_sentence(clean_sentence(template.doc.text))
 
             sentence_similarity_score = self.title_sentence_similarity(title, template)
@@ -153,38 +159,35 @@ class CreativeTitleGenerator:
             title_token = title[index]
             if not is_valid(title_token):
                 continue
-            # TODO check a word is already replaced
-            # TODO check the word in different form
             i = 0
             for token in temple_sentence.doc:
                 if not is_valid(token):
                     i += 1
-                    # TODO check has vector
                     continue
+                # Replace word
                 if token.pos is title_token.pos:
-                    # if token.tag_ == title_token.tag_:
                     score = token.similarity(title_token)
-                    if score > 0.5 and score != 1:
-                        replace_words[i] = title_token
-                elif i > 0 and token.pos == NOUN and title_token.pos == ADJ:
+                    if 0.5 < score < 0.9:
+                        replace_words[i] = (title_token, token, score)
+                # Insert word as adjective
+                elif i > 0 and ((token.pos == NOUN and title_token.pos == ADJ) or
+                                (token.pos == ADJ and title_token.pos == NOUN)):
                     score = token.similarity(title_token)
-                    if score > 0.5 and score != 1:
-                        insertion_words[i] = title_token
-                    # elif i > 0 and token.pos == VERB and title_token.pos == ADV:
-                    #     score = token.similarity(title_token)
-                    #     if score > 0.5 and score != 1:
-                    #         sent[i - 1] = title_token
-                    #         c += 1
+                    if 0.5 < score < 0.9:
+                        insertion_words[i] = (title_token, token, score)
                 i += 1
 
-        sent = [i for i in temple_sentence.doc]
+        sent = [(i, None, -1) for i in temple_sentence.doc]
         for index, val in replace_words.items():
             sent[index] = val
 
+        # TODO - Insert at index
         for index, val in insertion_words.items():
-            sent[index - 1] = val
+            if sent[index][2] < val[2]:
+                sent.insert(index, val)
+                # sent[index - 1] = val
 
-        return " ".join(sent.text for sent in sent), len(replace_words) > 0, len(insertion_words) > 0
+        return " ".join(sent[0].text for sent in sent), len(replace_words) > 0, len(insertion_words) > 0
 
     def important_keywords_indexes(self, tokens):
         i = -1
@@ -194,15 +197,16 @@ class CreativeTitleGenerator:
             try:
                 if not is_valid(token):
                     continue
-                # TODO add socre in IF
+                # Checking named entity
                 if token.ent_type != 0:
                     keyword_index.append(i)
                     continue
 
+                # Checking word is an important word for words collected from corpus
                 word = token.text if token.pos in [PRON, ADJ] else token.lemma_
-                val = self.keyword_coverage[word.lower()]
-                score = val / 1493775
-                if score > 0.02:
+                val = self.word_coverage[word.lower()]
+                score = val / headline_count
+                if score > keyword_threshold:
                     keyword_index.append(i)
             except KeyError:
                 pass
@@ -212,7 +216,7 @@ class CreativeTitleGenerator:
     def similar_keywords_for_indexes(self, title):
         similar_words_for_indexes = {}
         for index in title.important_keyword_indexes:
-            similar_words_for_indexes[index] = {}
+            similar_words_for_indexes[index] = {title[index].text}
             # IF entity type
             if title[index].ent_type != 0:
                 continue
@@ -220,7 +224,6 @@ class CreativeTitleGenerator:
             word = title[index].text if title[index].pos in [PROPN, ADJ] else title[index].lemma_
             try:
                 similar_words = self.nlp.similar_word_for_sentence(word, title.text)
-                # TODO remove same words
                 similar_words = [token.lower() for token in similar_words
                                  if token.lower() != word and word not in token.lower()]
                 similar_words = similar_words[:2]
@@ -231,20 +234,36 @@ class CreativeTitleGenerator:
 
 
 if __name__ == '__main__':
+    # import csv, random, time
+    #
     # titles = []
-    # with open('C:/Users/ShimaK/PycharmProjects/CreativeAid!/test_corpus/test_title/titles/abcnews-date-text.csv') \
-    #         as csv_file:
+    # with open('C:/Users/ShimaK/Downloads/Compressed/million-headlines/abcnews-date-text.csv') as csv_file:
     #     csv_reader = csv.reader(csv_file, delimiter=',')
     #     line_count = 0
     #     for row in csv_reader:
-    #         titles.append(Title(row[1]))
+    #         titles.append(row[1])
     #         line_count += 1
-    #     print(f'Processed {line_count} lines.')
-    # titles = titles[1:]
+    #     print('Processed {} lines.'.format(line_count))
+    # titles = titles[1:100]
+    # titles = [Title(title) for title in titles]
+    # randomy = random.choices(titles, k=10)
 
-    title = Title('The Obama administration is planning to issue a final rule designed to enhance the safety of '
-                  'offshore oil drilling equipment')
+    titles = [
+        # "The Obama administration is planning to issue a final rule designed to enhance the safety of offshore oil "
+        # "drilling equipment",
+        # "Russia’s defense ministry has rejected complaints by U.S. officials who claimed Russian attack planes buzzed "
+        # "dangerously close to a U.S. Navy destroyer in the Baltic Sea earlier this week.",
+        # "Time for Wales to step up",
+        "Pyongyang drivers are feeling some pain at the pump as rising gas prices put a pinch on what has been major traffic growth"
+    ]
+
+    # process_begin_time_0 = time.process_time()
     cr = CorpusReader(
         "C:/Users/ShimaK/PycharmProjects/CreativeAid!/creativeaid/test_corpus/test_generate_corpus/cliche", "")
-    ctg = CreativeTitleGenerator(NLP())
-    ctg.generate_with_corpus([title], cr)
+    ctg = CreativeTitleGenerator(NLP(word2vec_limit=500000, requires_word2vec=True))
+    # logging.debug(f"Loading time {(time.process_time() - process_begin_time_0) / 60.0}")
+
+    # process_begin_time_0 = time.process_time()
+    s = ctg.generate_with_corpus(titles, cr)
+    print(s)
+    # logging.debug(f"Generate time {(time.process_time() - process_begin_time_0) / 60.0}")
