@@ -10,7 +10,7 @@ from creativeaid.identifier.word_frequency import WordFrequency
 from creativeaid.nlp import NLP
 from creativeaid.models import Token, WordPair, CreativeSentence
 from creativeaid.corpus_reader import CorpusReader
-from creativeaid.nlp.text_utils import is_qualified
+from creativeaid.nlp.text_utils import is_qualified, is_valid
 
 logging.basicConfig(format=u'[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s', level=logging.NOTSET)
 
@@ -85,6 +85,9 @@ class CreativeTextIdentifierPipe(object):
                 if not chunk.root.head.pos == VERB or not (chunk.root.dep == NSUBJ or chunk.root.dep == DOBJ):
                     continue
 
+                if not (chunk.root.head.is_stop and chunk.root.is_stop):
+                    continue
+
                 noun_norm = chunk.root.text if chunk.root.pos == PRON else chunk.root.lemma_
                 noun = Token(noun_norm, chunk.root)
                 verb = Token(chunk.root.head.lemma_, chunk.root.head)
@@ -104,7 +107,12 @@ class CreativeTextIdentifierPipe(object):
                 word_pair.sps = self.word_freq.sps(word_pair.verb.cluster)
 
                 # SA identification
-                word_pair.sa = self.word_freq.sa(word_pair.verb.cluster, word_pair.noun.cluster)
+                word_pair.sa = 0
+                for word in chunk:
+                    word_pair.sa += self.word_freq.sa(word_pair.verb.cluster, word.cluster)
+
+                word_pair.sa = word_pair.sa / len(chunk)
+
                 word_pairs.append(word_pair)
 
             sentence._.set("word_pairs", word_pairs)
@@ -123,3 +131,73 @@ class CreativeTextIdentifierPipe(object):
         :return: cluster
         """
         return self.mini_batch_kmeans.predict(numpy.array([word.vector]))[0]
+
+
+if __name__ == '__main__':
+    import string
+
+
+    def clean_text(text):
+        text = text.lower()
+        text = ''.join([i for i in text if not i.isdigit()])
+        text = text.translate(str.maketrans('', '', string.punctuation))
+        return text.strip()
+
+
+    sent = ""
+
+    corpus_reader = CorpusReader(
+        "/root/PycharmProjects/CreativeAid!/creativeaid/test_corpus/test_title", "")
+
+    text_identifier = CreativeTextIdentifier(NLP(word2vec_limit=500000, requires_word2vec=False, is_nlp_sm=False))
+    s = text_identifier.identify_with_corpus(corpus_reader)
+    print(s)
+
+    # corpus_reader = CorpusReader(
+    #     "/root/PycharmProjects/CreativeAid!/creativeaid/test_corpus/test_generate_corpus/cliche", "")
+    # text_identifier = CreativeTextIdentifier(NLP())
+    # text = text_identifier.identify_with_corpus(corpus_reader)
+    #
+    # from nltk.corpus.reader.bnc import BNCCorpusReader
+    # import string
+    #
+    # # corpus_reader = CorpusReader(
+    # #     "C:/Users/ShimaK/PycharmProjects/CreativeAid!/creativeaid/test_corpus/test_generate_corpus/cliche", "")
+    # process_begin_time_0 = time.process_time()
+    #
+    # # corpus_reader = CorpusReader("./creativeaid/test_corpus/test_generate_corpus/cliche", "")
+    # text_identifier = CreativeTextIdentifier(NLP())
+    #
+    # logging.debug(f"Loading Time {(time.process_time() - process_begin_time_0) / 60}")
+    # logging.debug(f"================================================================")
+    #
+    #
+    # path = "C:/Users/ShimaK/PycharmProjects/download/Texts"
+    #
+    # bnc_reader = BNCCorpusReader(root=path, fileids=r'[A-K]/\w*/\w*\.xml')
+    #
+    # test_sentences = []
+    # for root, dirs, files in os.walk(path):
+    #     for name in files:
+    #         process_begin_time = time.process_time()
+    #
+    #         file = os.path.join(root, name).replace(path, "")
+    #         sentences = bnc_reader.sents(fileids=file[1:])
+    #
+    #         clean_sentences = [clean_text(" ".join(s)) for s in sentences]
+    #         if len(test_sentences) <= 1600:
+    #             test_sentences += clean_sentences
+    #         else:
+    #             break
+    #     else:
+    #         continue  # only executed if the inner loop did NOT break
+    #     break  #
+    #
+    # for length in [100, 200, 400, 800, 1600]:
+    #     process_begin_time_0 = time.process_time()
+    #     text_identifier.identify_with_sentences(test_sentences[:length])
+    #     logging.debug(f"Identification time of length {length} {(time.process_time() - process_begin_time_0) / 60.0}")
+    #     logging.debug(f"================================================================")
+    # text_identifier.identify_with_corpus(corpus_reader)
+
+    # pickle.dump(text, open('text', 'wb'))

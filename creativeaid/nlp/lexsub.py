@@ -76,11 +76,30 @@ class LexSub(object):
         cscore = sum(cscores)
         return (tscore + cscore) / (len(C) + 1)
 
+    def substitute_words(self, w, POS, sentence):
+        """
+        Get appropriate substitution for a word given context words
+        """
+
+        # generate candidate substitutions
+        candidates = self.get_candidates(w, POS)
+        if sentence is None:
+            return candidates[:self.n_substitutes]
+        else:
+            context_words = tools.get_words(sentence)
+            # filter context words: exist in the word2vec vocab, not stop words  
+            context_words = list(filter(lambda c: c in self.word_vectors.vocab and c not in tools.stopwords, context_words))
+            cand_scores = [self.get_substitutability(w, s, context_words) if s in self.word_vectors.vocab else 0 for s
+                           in candidates]
+            assert (len(cand_scores) == len(candidates))
+            sorted_candidates = sorted(zip(candidates, cand_scores), key=lambda x: x[1], reverse=True)
+            return [sub for sub, score in sorted_candidates][:self.n_substitutes]
+
     def lex_sub(self, word_POS, sentence):
-        """ Get appropriate substitution for a word given context words 
-        
+        """ Get appropriate substitution for a word given context words
+
         word_POS = word with part of speech in form word.POS e.g. dog.n
-        context_words = list of words in context 
+        context_words = list of words in context
         """
         w, _, POS = word_POS.partition('.')
         # generate candidate substitutions
@@ -89,10 +108,8 @@ class LexSub(object):
             return candidates[:self.n_substitutes]
         else:
             context_words = tools.get_words(sentence)
-            # filter context words: exist in the word2vec vocab, not stop words  
-            context_words = list(filter(lambda c: c in self.word_vectors.vocab
-                                                  and c not in tools.stopwords,
-                                        context_words))
+            # filter context words: exist in the word2vec vocab, not stop words
+            context_words = list(filter(lambda c: c in self.word_vectors.vocab and c not in tools.stopwords, context_words))
             cand_scores = [self.get_substitutability(w, s, context_words) if s in self.word_vectors.vocab else 0 for s
                            in candidates]
             assert (len(cand_scores) == len(candidates))

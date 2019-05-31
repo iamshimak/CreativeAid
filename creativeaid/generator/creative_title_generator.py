@@ -155,39 +155,59 @@ class CreativeTitleGenerator:
         replace_words = {}
         insertion_words = {}
 
+        def is_substitutable(score):
+            return 0.5 < score < 0.9
+
         for index in important_keywords:
             title_token = title[index]
             if not is_valid(title_token):
                 continue
             i = 0
-            for token in temple_sentence.doc:
-                if not is_valid(token):
+            for template_token in temple_sentence.doc:
+                if not is_valid(template_token):
                     i += 1
                     continue
                 # Replace word
-                if token.pos is title_token.pos:
-                    score = token.similarity(title_token)
-                    if 0.5 < score < 0.9:
-                        replace_words[i] = (title_token, token, score)
+                if template_token.pos is title_token.pos:
+                    score = template_token.similarity(title_token)
+                    if is_substitutable(score):
+                        replace_words[i] = (title_token, template_token, score)
                 # Insert word as adjective
-                elif i > 0 and ((token.pos == NOUN and title_token.pos == ADJ) or
-                                (token.pos == ADJ and title_token.pos == NOUN)):
-                    score = token.similarity(title_token)
-                    if 0.5 < score < 0.9:
-                        insertion_words[i] = (title_token, token, score)
+                elif i > 0 and template_token.pos == NOUN and title_token.pos == ADJ:
+                    score = template_token.similarity(title_token)
+                    if is_substitutable(score):
+                        insertion_words[i] = (title_token, template_token, score)
+                # Insert word as adjective
+                elif i > 0 and template_token.pos == ADJ and title_token.pos == NOUN:
+                    score = template_token.similarity(title_token)
+                    if is_substitutable(score):
+                        insertion_words[i] = (template_token, title_token, score)
+                # Insert word as adverb
+                elif i > 0 and template_token.pos == VERB and title_token.pos == ADV:
+                    score = template_token.similarity(title_token)
+                    if is_substitutable(score):
+                        insertion_words[i] = (title_token, template_token, score)
+                # Insert word as adverb
+                elif i > 0 and template_token.pos == ADV and title_token.pos == VERB:
+                    score = template_token.similarity(title_token)
+                    if is_substitutable(score):
+                        insertion_words[i] = (title_token, template_token, score)
                 i += 1
+
+        replaced = 0
+        inserted = 0
 
         sent = [(i, None, -1) for i in temple_sentence.doc]
         for index, val in replace_words.items():
             sent[index] = val
+            replaced += 1
 
-        # TODO - Insert at index
         for index, val in insertion_words.items():
             if sent[index][2] < val[2]:
                 sent.insert(index, val)
-                # sent[index - 1] = val
+                inserted += 1
 
-        return " ".join(sent[0].text for sent in sent), len(replace_words) > 0, len(insertion_words) > 0
+        return " ".join(sent[0].text for sent in sent), replaced > 0, inserted > 0
 
     def important_keywords_indexes(self, tokens):
         i = -1
@@ -216,7 +236,7 @@ class CreativeTitleGenerator:
     def similar_keywords_for_indexes(self, title):
         similar_words_for_indexes = {}
         for index in title.important_keyword_indexes:
-            similar_words_for_indexes[index] = {title[index].text}
+            similar_words_for_indexes[index] = [title[index].text]
             # IF entity type
             if title[index].ent_type != 0:
                 continue
@@ -247,23 +267,69 @@ if __name__ == '__main__':
     # titles = titles[1:100]
     # titles = [Title(title) for title in titles]
     # randomy = random.choices(titles, k=10)
+    # i = 7
+    data = pickle.load(open(f"/media/root/8816faf2-54e7-4c2e-85c7-b867b5512306/data/data-7", 'rb'))
+    print("")
+    s = []
+    # for se in data['creative_titles']:
+    #     s.append(se.template.text)
+    #
+    # for i, l in enumerate(data['creative_sentences']):
+    #     if l.text not in s:
+    #         data['creative_sentences'].pop(i)
+    # pickle.dump(data, open(f"data-{i}", 'wb'))
+
+    import time
+
+    # process_begin_time_0 = time.process_time()
+    # data = pickle.load(open("data-6", 'rb'))
+    # logging.debug(f"Loading time {(time.process_time() - process_begin_time_0) / 60.0}")
+
+    cr = CorpusReader(
+        "/root/PycharmProjects/CreativeAid!/creativeaid/test_corpus/test_generate_corpus/cliche/", "")
+    ctg = CreativeTitleGenerator(NLP(word2vec_limit=500000, requires_word2vec=True, is_nlp_sm=False))
 
     titles = [
         # "The Obama administration is planning to issue a final rule designed to enhance the safety of offshore oil "
         # "drilling equipment",
         # "Russia’s defense ministry has rejected complaints by U.S. officials who claimed Russian attack planes buzzed "
         # "dangerously close to a U.S. Navy destroyer in the Baltic Sea earlier this week.",
-        # "Time for Wales to step up",
-        "Pyongyang drivers are feeling some pain at the pump as rising gas prices put a pinch on what has been major traffic growth"
+        # "Pyongyang drivers are feeling some pain at the pump as rising gas prices put a pinch on what has been major traffic growth",
+        # "Ripple effect of rising gas prices",
+        "Donal Trump's popularity with white America doesn't guarantee him the White house"
     ]
 
+    index = "10"
+    record = {}
+
+    templates = []
+    for file in cr.corpus():
+        templates += file.contents_lines()
+
+    templates = [(line.strip(), idx) for idx, line in enumerate(templates) if is_qualified(line.strip())]
+
+    title = Title(titles[0])
+    title = ctg.enhance_title_info(title)
+    record["title"] = title
+
+    creative_sentences = ctg.search_candidates_for_creative_sentences(title, templates)
+    record["creative_sentences"] = creative_sentences
+
+    creative_titles = []
+    for creative_sentence in creative_sentences:
+        v, replaced, inserted = ctg.substitute_words(creative_sentence, title)
+        if replaced or inserted:
+            creative_title = CreativeTitle(title, creative_sentence, v)
+            creative_titles.append(creative_title)
+
+    record["creative_titles"] = creative_titles
+
+    pickle.dump(record, open(f"data-{index}", 'wb'))
+
     # process_begin_time_0 = time.process_time()
-    cr = CorpusReader(
-        "C:/Users/ShimaK/PycharmProjects/CreativeAid!/creativeaid/test_corpus/test_generate_corpus/cliche", "")
-    ctg = CreativeTitleGenerator(NLP(word2vec_limit=500000, requires_word2vec=True))
     # logging.debug(f"Loading time {(time.process_time() - process_begin_time_0) / 60.0}")
 
     # process_begin_time_0 = time.process_time()
-    s = ctg.generate_with_corpus(titles, cr)
-    print(s)
+    # s = ctg.generate_with_corpus(titles, cr)
+    # print(s)
     # logging.debug(f"Generate time {(time.process_time() - process_begin_time_0) / 60.0}")

@@ -2,16 +2,28 @@ class Token:
     def __init__(self, text_, doc):
         self.text_ = text_
         self.text = doc.text
+        self.doc = doc
         self.lemma = doc.lemma
         self.pos = doc.pos
         self.pos_ = doc.pos_
         self.dep = doc.dep
         self.dep_ = doc.dep_
         self.vector = doc.vector
-        self.cluster = doc.cluster
+        # self.cluster = doc.cluster
+
+    @property
+    def cluster(self):
+        return self.doc.cluster
+
+    @cluster.setter
+    def cluster(self, value):
+        pass
 
     def has_vector(self):
         return self.vector is not None
+
+    def __repr__(self):
+        return self.text
 
 
 class WordPair:
@@ -22,16 +34,26 @@ class WordPair:
         self.noun = noun
         self.sps = None
         self.sa = None
+        self.noun_chunk = None
 
+    @property
     def has_vector(self):
         return self.verb.has_vector() and self.noun.has_vector()
 
+    @property
     def is_literal(self):
         return self.sa > self._optimal_sa_score if self.sa is not None else None
+
+    @property
+    def is_creative(self):
+        return self.sa < self._optimal_sa_score if self.sa is not None else None
 
     @staticmethod
     def set_optimal_sa_score(score):
         _optimal_sa_score = score
+
+    def __repr__(self):
+        return f"verb [{self.verb}] | noun [{self.noun}]"
 
 
 class Corpus:
@@ -44,13 +66,30 @@ class Corpus:
         # TODO check the error with read()
         return open(self.path, encoding='utf-8').read()
         # return open(file.path, encoding=self.encoding).readlines()
+        # return self.contents
 
     def contents_lines(self):
         return self.contents.split('\n')
 
 
-class Title(object):
+class Sentence(object):
     def __init__(self, text):
+        self.text = text
+        self.preprocessed = None
+        self.tokens = None
+        self.keywords = None
+
+    # @property
+    # def has_vector(self):
+    #     return self.vector is not None
+
+    def __repr__(self):
+        return self.text
+
+
+class Title(Sentence):
+    def __init__(self, text):
+        super().__init__(text)
         self.text = text
         self.doc = None
         self.doc_ = None
@@ -67,16 +106,32 @@ class Title(object):
         return len(self.text)
 
 
-class Template(object):
-    def __init__(self, doc):
+class Template(Sentence):
+    def __init__(self, doc, text):
+        super().__init__(text)
         self.doc = doc
         self.nlp_text = None
         self.text = doc.text
         self.description = None
 
+    def __repr__(self):
+        return self.text
 
-class CreativeSentence(object):
+
+class CreativeTitle(Sentence):
     def __init__(self, title, template, text):
+        super().__init__(text)
         self.title = title
         self.template = template
         self.text = text
+
+
+class CreativeSentence(Sentence):
+    def __init__(self, text, doc, word_pair):
+        super().__init__(text)
+        self.text = text
+        self.doc = doc
+        self.word_pair = word_pair
+
+    def __repr__(self):
+        return self.text

@@ -1,5 +1,10 @@
 from creativeaid.corpus_reader import CorpusReader
 from gensim.summarization.summarizer import summarize
+from nltk.cluster.util import cosine_distance
+from creativeaid.nlp.stop_words import STOP_WORDS
+import numpy as np
+import networkx as nx
+from summa.summarizer import summarize
 
 
 class TitleGenerator:
@@ -10,7 +15,7 @@ class TitleGenerator:
     def generate_title_from_corpus(self, corpus_reader, ratio=0.2, word_count=None):
         titles = []
         for file in corpus_reader.corpus():
-            titles.append(self._generate_title(file.contents, ratio, word_count))
+            titles.append(self._generate_title(file.contents_lines(), ratio, word_count))
         return titles
 
     def generate_title_from_sentences(self, sentences, ratio=0.2, word_count=None):
@@ -36,3 +41,4 @@ if __name__ == '__main__':
     cr = CorpusReader("../test_corpus/test_title", "")
     title_gen = TitleGenerator()
     print(title_gen.generate_title_from_corpus(cr))
+
